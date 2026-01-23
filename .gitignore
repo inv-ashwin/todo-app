@@ -1,0 +1,13 @@
+# --- Python Files ---
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints
+
+# --- Database ---
+*.db
+
+# --- IDEs ---
+.vscode/
+.idea/
+.DS_Store
