@@ -88,33 +88,103 @@ def import_from_csv(cursor, conn, filename):
                         (row['task'], row['status'], row['created_at'], row['started_at'], row['completed_at']))
         conn.commit()
 
-# --- MAIN INTERFACE ---
+def handle_add_task(todo_list, cursor, conn):
+    task = input("Enter task: ")
+    if add_task(cursor, conn, task):
+        print("Task Added")
+    input("Press Enter...")
+    clear_screen()
 
-def main():
-    if not login():
-        print(" Invalid Credentials")
-        sys.exit()
+def handle_view_tasks(todo_list, *_):
+    print("\n1.All\n2.Pending\n3.Completed\n4.In Progress")
+    ch = int(input("Enter choice: "))
+
+    if ch == 1:
+        print_table(todo_list)
+    elif ch == 2:
+        print_table([t for t in todo_list if t[1] == "Not Started"])
+    elif ch == 3:
+        print_table([t for t in todo_list if t[1] == "Completed"])
+    elif ch == 4:
+        print_table([t for t in todo_list if t[1] == "Started"])
+
+    input("Press Enter...")
+    clear_screen()
+
+def handle_mark_started(todo_list, cursor, conn):
+    pending = [t for t in todo_list if t[1] == "Not Started"]
+
+    for i, t in enumerate(pending, 1):
+        print(f"{i}. {t[0]}")
+
+    if pending:
+        n = int(input("Number to start: "))
+        update_task_status(cursor, conn, pending[n - 1], "Started")
+        print("Task Started")
+
+    input("Press Enter...")
+    clear_screen()
+
+def handle_mark_completed(todo_list, cursor, conn):
+    started = [t for t in todo_list if t[1] == "Started"]
+
+    for i, t in enumerate(started, 1):
+        print(f"{i}. {t[0]}")
+
+    if started:
+        n = int(input("Number to complete: "))
+        update_task_status(cursor, conn, started[n - 1], "Completed")
+        print("Task Completed")
+
+    input("Press Enter...")
+    clear_screen()
+
+def handle_delete_task(todo_list, cursor, conn):
+    for i, t in enumerate(todo_list, 1):
+        print(f"{i}. {t[0]}")
+
+    if todo_list:
+        n = int(input("Number to delete: "))
+        delete_task(cursor, conn, todo_list[n - 1])
 
     clear_screen()
-    print("Access Granted! Welcome,", ADMIN_USER)
-    conn, cursor = init_db()
 
-    while True:
-        cursor.execute("SELECT * FROM tasks")
-        todo_list = cursor.fetchall() 
-        total = len(todo_list)
-        completed = sum(1 for t in todo_list if t[1] == "Completed")
-        pending_count = sum(1 for t in todo_list if t[1] == "Not Started")
-        in_progress = sum(1 for t in todo_list if t[1] == "Started")
+def handle_export_csv(todo_list, *_):
+    path = input("Path (Enter for default): ").strip()
+    filename = path if path else "todo_export.csv"
+    export_to_csv(todo_list, filename)
+    print(f"Exported to {filename}")
+    input("Press Enter...")
+    clear_screen()
 
-        print(f"""
+def handle_import_csv(_, cursor, conn):
+    path = input("Path (Enter for default): ").strip()
+    filename = path if path else "todo_export.csv"
+
+    if os.path.exists(filename):
+        import_from_csv(cursor, conn, filename)
+        print("Imported.")
+
+    input("Press Enter...")
+    clear_screen()
+
+def get_task_stats(todo_list):
+    return {
+        "total": len(todo_list),
+        "completed": sum(1 for t in todo_list if t[1] == "Completed"),
+        "pending": sum(1 for t in todo_list if t[1] == "Not Started"),
+        "in_progress": sum(1 for t in todo_list if t[1] == "Started"),
+    }
+
+def show_menu(stats):
+    print(f"""
 +------------------------------+
 |         TASK MANAGER         |
 +------------------------------+
-| Total Tasks     : {total:<10} |
-| Completed       : {completed:<10} |
-| Pending         : {pending_count:<10} |
-| In Progress     : {in_progress:<10} |
+| Total Tasks     : {stats['total']:<10} |
+| Completed       : {stats['completed']:<10} |
+| Pending         : {stats['pending']:<10} |
+| In Progress     : {stats['in_progress']:<10} |
 +------------------------------+
 | 1. Add Task                  |
 | 2. View Tasks                |
@@ -126,76 +196,50 @@ def main():
 | 8. Logout                    |
 +------------------------------+""")
 
+# --- MAIN INTERFACE ---
+
+def main():
+    if not login():
+        print("Invalid Credentials")
+        sys.exit()
+
+    clear_screen()
+    print("Access Granted! Welcome,", ADMIN_USER)
+
+    conn, cursor = init_db()
+
+    actions = {
+        1: handle_add_task,
+        2: handle_view_tasks,
+        3: handle_mark_started,
+        4: handle_mark_completed,
+        5: handle_delete_task,
+        6: handle_export_csv,
+        7: handle_import_csv,
+    }
+
+    while True:
+        cursor.execute("SELECT * FROM tasks")
+        todo_list = cursor.fetchall()
+
+        stats = get_task_stats(todo_list)
+        show_menu(stats)
+
         try:
             choice = int(input("Enter choice: "))
         except ValueError:
             continue
 
-        if choice == 1:
-            task = input("Enter task: ")
-            if add_task(cursor, conn, task): print("Task Added")
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 2:
-            print("\n1.All\n2.Pending\n3.Completed\n4.In Progress")
-            ch = int(input("Enter choice: "))
-            if ch == 1: print_table(todo_list)
-            elif ch == 2: print_table([t for t in todo_list if t[1] == "Not Started"])
-            elif ch == 3: print_table([t for t in todo_list if t[1] == "Completed"])
-            elif ch == 4: print_table([t for t in todo_list if t[1] == "Started"])
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 3:
-            pending = [t for t in todo_list if t[1] == "Not Started"]
-            for i, t in enumerate(pending, 1): print(f"{i}. {t[0]}")
-            if pending:
-                n = int(input("Number to start: "))
-                update_task_status(cursor, conn, pending[n-1], "Started")
-                print("Task Started")
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 4:
-            started = [t for t in todo_list if t[1] == "Started"]
-            for i, t in enumerate(started, 1): print(f"{i}. {t[0]}")
-            if started:
-                n = int(input("Number to complete: "))
-                update_task_status(cursor, conn, started[n-1], "Completed")
-                print("Task Completed")
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 5:
-            for i, t in enumerate(todo_list, 1): print(f"{i}. {t[0]}")
-            if todo_list:
-                n = int(input("Number to delete: "))
-                delete_task(cursor, conn, todo_list[n-1])
-            clear_screen()
-
-        elif choice == 6:
-            path = input("Path (Enter for default): ").strip()
-            filename = path if path else "todo_export.csv"
-            export_to_csv(todo_list, filename)
-            print(f"Exported to {filename}")
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 7:
-            path = input("Path (Enter for default): ").strip()
-            filename = path if path else "todo_export.csv"
-            if os.path.exists(filename):
-                import_from_csv(cursor, conn, filename)
-                print("Imported.")
-            input("Press Enter...")
-            clear_screen()
-
-        elif choice == 8:
+        if choice == 8:
             print("Goodbye!")
             break
 
+        handler = actions.get(choice)
+        if handler:
+            handler(todo_list, cursor, conn)
+
     conn.close()
+
 
 if __name__ == "__main__":
     main()

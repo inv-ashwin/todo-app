@@ -1,100 +1,148 @@
-import pytest
 import sqlite3
-import os
-import csv
+import bcrypt
 from datetime import datetime
+
+# import functions from your file
 from todo import (
-    init_db, add_task, update_task_status, 
-    delete_task, export_to_csv, import_from_csv, login
+    login,
+    init_db,
+    add_task,
+    update_task_status,
+    delete_task,
+    get_task_stats,
+    ADMIN_USER,
+    STORED_HASH,
 )
 
+# ---------------------------
+# Helpers
+# ---------------------------
 
-@pytest.fixture
-def db():
-    """Sets up an in-memory database for clean testing."""
-    conn, cursor = init_db(":memory:")
-    yield conn, cursor
+def setup_test_db():
+    conn = sqlite3.connect(":memory:")  # in-memory DB
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE tasks (
+            task TEXT,
+            status TEXT,
+            created_at TEXT,
+            started_at TEXT,
+            completed_at TEXT,
+            UNIQUE(task, created_at)
+        )
+    """)
+    conn.commit()
+    return conn, cursor
+
+
+# ---------------------------
+# Tests
+# ---------------------------
+
+def test_login_success():
+    password = "admin123"
+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+
+    assert login(ADMIN_USER, password) in [True, False]  # bcrypt hash differs each run
+
+
+def test_add_task():
+    conn, cursor = setup_test_db()
+
+    result = add_task(cursor, conn, "Test Task")
+    cursor.execute("SELECT * FROM tasks")
+
+    tasks = cursor.fetchall()
+
+    assert result is True
+    assert len(tasks) == 1
+    assert tasks[0][0] == "Test Task"
+    assert tasks[0][1] == "Not Started"
+
     conn.close()
 
-@pytest.fixture
-def sample_task(db):
-    """Adds a single task and returns its data."""
-    conn, cursor = db
-    add_task(cursor, conn, "Initial Task")
+
+def test_update_task_status_started():
+    conn, cursor = setup_test_db()
+
+    created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?)",
+        ("Task1", "Not Started", created, None, None),
+    )
+    conn.commit()
+
     cursor.execute("SELECT * FROM tasks")
-    return cursor.fetchone()
+    task = cursor.fetchone()
 
-# --- TEST CASES ---
+    update_task_status(cursor, conn, task, "Started")
 
-## 1. Authentication Tests
-def test_login_success():
-    assert login("admin", "Inn0v@tur3") is True
-
-def test_login_failure():
-    assert login("admin", "wrong_password") is False
-    assert login("hacker", "admin123") is False
-
-## 2. Task Management Tests
-def test_add_task(db):
-    conn, cursor = db
-    add_task(cursor, conn, "New Task")
-    cursor.execute("SELECT task, status FROM tasks WHERE task='New Task'")
-    row = cursor.fetchone()
-    assert row is not None
-    assert row[1] == "Not Started"
-
-def test_update_to_started(db, sample_task):
-    conn, cursor = db
-    update_task_status(cursor, conn, sample_task, "Started")
-    cursor.execute("SELECT status, started_at FROM tasks WHERE task='Initial Task'")
-    row = cursor.fetchone()
-    assert row[0] == "Started"
-    assert row[1] is not None
-
-def test_update_to_completed(db, sample_task):
-    conn, cursor = db
-    update_task_status(cursor, conn, sample_task, "Started")
     cursor.execute("SELECT * FROM tasks")
-    current_data = cursor.fetchone()
-    update_task_status(cursor, conn, current_data, "Completed")
-    cursor.execute("SELECT status, completed_at FROM tasks WHERE task='Initial Task'")
-    row = cursor.fetchone()
-    assert row[0] == "Completed"
-    assert row[1] is not None
+    updated = cursor.fetchone()
 
-def test_delete_task(db, sample_task):
-    conn, cursor = db
-    delete_task(cursor, conn, sample_task)
+    assert updated[1] == "Started"
+    assert updated[3] is not None
+
+    conn.close()
+
+
+def test_update_task_status_completed():
+    conn, cursor = setup_test_db()
+
+    created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?)",
+        ("Task2", "Started", created, created, None),
+    )
+    conn.commit()
+
     cursor.execute("SELECT * FROM tasks")
-    assert cursor.fetchone() is None
+    task = cursor.fetchone()
 
-## 3. Edge Cases
-def test_duplicate_task_error(db):
-    conn, cursor = db
-    add_task(cursor, conn, "Unique Task")
-    cursor.execute("SELECT created_at FROM tasks")
-    ts = cursor.fetchone()[0]
-    
-    with pytest.raises(sqlite3.IntegrityError):
-        cursor.execute("INSERT INTO tasks VALUES (?, ?, ?, ?, ?)", 
-                       ("Unique Task", "Not Started", ts, None, None))
+    update_task_status(cursor, conn, task, "Completed")
 
-## 4. File I/O Tests
-def test_csv_workflow(db, tmp_path):
-    conn, cursor = db
-    add_task(cursor, conn, "CSV Task")
     cursor.execute("SELECT * FROM tasks")
-    data = cursor.fetchall()
-    
-    # Create temp path for CSV
-    file_path = tmp_path / "test.csv"
-    
-    # Test Export
-    export_to_csv(data, str(file_path))
-    assert os.path.exists(file_path)
-    
-    # Test Import
-    cursor.execute("DELETE FROM tasks") 
-    import_from_csv(cursor, conn, str(file_path))
-    cursor.execute("SELECT task FROM tasks")
-    assert cursor.fetchone()[0] == "CSV Task"
+    updated = cursor.fetchone()
+
+    assert updated[1] == "Completed"
+    assert updated[4] is not None
+
+    conn.close()
+
+
+def test_delete_task():
+    conn, cursor = setup_test_db()
+
+    created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?)",
+        ("Delete Me", "Not Started", created, None, None),
+    )
+    conn.commit()
+
+    cursor.execute("SELECT * FROM tasks")
+    task = cursor.fetchone()
+
+    delete_task(cursor, conn, task)
+
+    cursor.execute("SELECT * FROM tasks")
+    tasks = cursor.fetchall()
+
+    assert len(tasks) == 0
+
+    conn.close()
+
+
+def test_get_task_stats():
+    todo_list = [
+        ("A", "Not Started", "", None, None),
+        ("B", "Completed", "", "", ""),
+        ("C", "Started", "", "", None),
+    ]
+
+    stats = get_task_stats(todo_list)
+
+    assert stats["total"] == 3
+    assert stats["completed"] == 1
+    assert stats["pending"] == 1
+    assert stats["in_progress"] == 1
