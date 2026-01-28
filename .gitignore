@@ -56,3 +56,6 @@ dist/
 # ======================
 tmp/
 temp/
+
+# Database
+*.db
