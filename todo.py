@@ -5,9 +5,12 @@ from datetime import datetime
 import getpass
 import bcrypt
 import sys
+from dotenv import load_dotenv
 
-ADMIN_USER = "admin"
-STORED_HASH = b'$2b$12$xSfXzy49CiTsLX8Ykm0GuO32Bwqfsk4DQt07QrZfGx0hksdrl1Sbm'
+load_dotenv() 
+
+ADMIN_USER = os.getenv("ADMIN_USER")
+PASSWORD = os.getenv("ADMIN_PASSWORD").encode() 
 
 
 
@@ -28,7 +31,7 @@ def login(u_input=None, p_input=None):
         u_input = input("Username: ")
         p_input = getpass.getpass("Password: ")
     if u_input == ADMIN_USER:
-        if bcrypt.checkpw(p_input.encode(), STORED_HASH):
+        if bcrypt.checkpw(p_input.encode(), PASSWORD):
             return True
     return False
 
@@ -199,6 +202,7 @@ def show_menu(stats):
 # --- MAIN INTERFACE ---
 
 def main():
+    print()
     if not login():
         print("Invalid Credentials")
         sys.exit()

@@ -1,18 +1,58 @@
-# --- Python Files ---
+# ======================
+# Python
+# ======================
 __pycache__/
 *.py[cod]
 *$py.class
-.ipynb_checkpoints
 
-# --- Database ---
-*.db
 
-# --- IDEs ---
+# ======================
+# Testing / Coverage
+# ======================
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ======================
+# IDEs & Editors
+# ======================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# ======================
+# OS Files
+# ======================
 .DS_Store
+Thumbs.db
 
-.*pytest_cache
 
-.*coverage
-.*htmlcov
+# ======================
+# SonarQube / SonarLint
+# ======================
+.sonar/
+.sonarcloud/
+sonar-project.properties
+
+# ======================
+# Build / Distribution
+# ======================
+build/
+dist/
+*.egg-info/
+
+# ======================
+# Environment Variables
+# ======================
+.env
+.env.*
+
+# ======================
+# Temporary files
+# ======================
+tmp/
+temp/
